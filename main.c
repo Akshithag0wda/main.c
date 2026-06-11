@@ -1,126 +1,122 @@
 #include <stdio.h>
 #include <stdlib.h>
-#define ROWS 20
-#define COLS 60
+
+#define HEIGHT 20
+#define WIDTH 60
 #define MAX_SHAPES 100
-// Enumeration for shape types
+
+// Shape types enumeration
 typedef enum {
     SHAPE_LINE,
     SHAPE_RECTANGLE,
     SHAPE_CIRCLE,
     SHAPE_TRIANGLE
 } ShapeType;
-// Shape data structures
+
+// Parameter structures for each shape
 typedef struct {
     int x1, y1;
     int x2, y2;
-} Line;
+} LineParams;
+
 typedef struct {
     int x1, y1;
     int x2, y2;
-} Rectangle;
+} RectParams;
+
 typedef struct {
-    int cx, cy;
+    int xc, yc;
     int r;
-} Circle;
+} CircleParams;
+
 typedef struct {
     int x1, y1;
     int x2, y2;
     int x3, y3;
-} Triangle;
-// Combined Shape structure
+} TriangleParams;
+
+// Combined Shape structure incorporating unique ID
 typedef struct {
     int id;
     ShapeType type;
     union {
-        Line line;
-        Rectangle rect;
-        Circle circle;
-        Triangle tri;
-    } data;
+        LineParams line;
+        RectParams rect;
+        CircleParams circle;
+        TriangleParams triangle;
+    } params;
 } Shape;
+
 // Global state
 Shape shapes[MAX_SHAPES];
-int shape_count = 0;
-int next_shape_id = 1;
-char canvas[ROWS][COLS];
-// Helper to read an integer with bounds checking and buffer flushing
-int read_int(const char *prompt, int min_val, int max_val) {
-    int val;
+int num_shapes = 0;
+int next_id = 1; // Unique ID generator
+char canvas[HEIGHT][WIDTH];
+
+// Get standard integer input within bounds using fgets and strtol
+int get_int_input(const char* prompt, int min_val, int max_val) {
     char buffer[100];
+    char *endptr;
+    long val;
     while (1) {
         printf("%s", prompt);
-        if (fgets(buffer, sizeof(buffer), stdin) == NULL) {
-            continue;
-        }
-        char *endptr;
-        val = (int)strtol(buffer, &endptr, 10);
-        
-        // Ensure some valid input was parsed and check for junk chars
-        if (endptr == buffer || (*endptr != '\n' && *endptr != '\0')) {
-            printf("Invalid input. Please enter a valid integer.\n");
-            continue;
-        }
-        if (val < min_val || val > max_val) {
-            printf("Value out of range [%d, %d]. Try again.\n", min_val, max_val);
-            continue;
-        }
-        return val;
-    }
-}
-// Clear the canvas by setting all pixels to background character '_'
-void clear_canvas(char canv[ROWS][COLS]) {
-    for (int y = 0; y < ROWS; y++) {
-        for (int x = 0; x < COLS; x++) {
-            canv[y][x] = '_';
-        }
-    }
-}
-// Display the canvas with horizontal and vertical coordinate indices for usability
-void display_canvas(char canv[ROWS][COLS]) {
-    printf("\n");
-    // Print column coordinate headers (tens place)
-    printf("   ");
-    for (int x = 0; x < COLS; x++) {
-        if (x % 10 == 0) {
-            printf("%d", x / 10);
+        if (fgets(buffer, sizeof(buffer), stdin) != NULL) {
+            val = strtol(buffer, &endptr, 10);
+            
+            // Check if parsing succeeded
+            if (endptr == buffer) {
+                printf("Invalid input! Please enter an integer.\n");
+                continue;
+            }
+            
+            // Skip trailing whitespace
+            while (*endptr == ' ' || *endptr == '\t' || *endptr == '\r' || *endptr == '\n') {
+                endptr++;
+            }
+            
+            if (*endptr != '\0') {
+                printf("Invalid input! Please enter a clean integer.\n");
+                continue;
+            }
+
+            if (val >= min_val && val <= max_val) {
+                return (int)val;
+            }
+            printf("Invalid range! Please enter a value between %d and %d.\n", min_val, max_val);
         } else {
-            printf(" ");
+            printf("Error reading input or EOF reached.\n");
+            exit(1);
         }
     }
-    printf("\n");
-    // Print column coordinate headers (ones place)
-    printf("   ");
-    for (int x = 0; x < COLS; x++) {
-        printf("%d", x % 10);
-    }
-    printf("\n");
-    // Print canvas rows with vertical indices
-    for (int y = 0; y < ROWS; y++) {
-        printf("%2d ", y);
-        for (int x = 0; x < COLS; x++) {
-            putchar(canv[y][x]);
+}
+
+// Canvas manipulation functions: initializes canvas with '_'
+void clear_canvas(char canvas[HEIGHT][WIDTH]) {
+    for (int y = 0; y < HEIGHT; y++) {
+        for (int x = 0; x < WIDTH; x++) {
+            canvas[y][x] = '_';
         }
-        printf("\n");
-    }
-    printf("\n");
-}
-// Safe pixel plot function with boundary checks
-void set_pixel(char canv[ROWS][COLS], int x, int y) {
-    if (x >= 0 && x < COLS && y >= 0 && y < ROWS) {
-        canv[y][x] = '*';
     }
 }
-// Bresenham's line algorithm
-void draw_line(char canv[ROWS][COLS], int x1, int y1, int x2, int y2) {
+
+// Safely draw pixel inside boundaries
+void set_pixel(char canvas[HEIGHT][WIDTH], int x, int y) {
+    if (x >= 0 && x < WIDTH && y >= 0 && y < HEIGHT) {
+        canvas[y][x] = '*';
+    }
+}
+
+// Bresenham's Line Algorithm
+void draw_line(char canvas[HEIGHT][WIDTH], int x1, int y1, int x2, int y2) {
     int dx = abs(x2 - x1);
     int dy = -abs(y2 - y1);
     int sx = x1 < x2 ? 1 : -1;
     int sy = y1 < y2 ? 1 : -1;
     int err = dx + dy;
     int e2;
+
     while (1) {
-        set_pixel(canv, x1, y1);
+        set_pixel(canvas, x1, y1);
         if (x1 == x2 && y1 == y2) break;
         e2 = 2 * err;
         if (e2 >= dy) {
@@ -133,29 +129,34 @@ void draw_line(char canv[ROWS][COLS], int x1, int y1, int x2, int y2) {
         }
     }
 }
-// Rectangle drawn by drawing outline lines
-void draw_rectangle(char canv[ROWS][COLS], int x1, int y1, int x2, int y2) {
-    draw_line(canv, x1, y1, x2, y1); // Top
-    draw_line(canv, x2, y1, x2, y2); // Right
-    draw_line(canv, x2, y2, x1, y2); // Bottom
-    draw_line(canv, x1, y2, x1, y1); // Left
+
+// Draw rectangle outlines using four lines connecting opposite corners
+void draw_rectangle(char canvas[HEIGHT][WIDTH], int x1, int y1, int x2, int y2) {
+    draw_line(canvas, x1, y1, x2, y1); // Top edge
+    draw_line(canvas, x2, y1, x2, y2); // Right edge
+    draw_line(canvas, x2, y2, x1, y2); // Bottom edge
+    draw_line(canvas, x1, y2, x1, y1); // Left edge
 }
-// Midpoint circle algorithm
-void draw_circle(char canv[ROWS][COLS], int cx, int cy, int r) {
-    if (r < 0) return;
+
+// Draw 8 symmetric points for standard Circle Algorithm
+void draw_circle_points(char canvas[HEIGHT][WIDTH], int xc, int yc, int x, int y) {
+    set_pixel(canvas, xc + x, yc + y);
+    set_pixel(canvas, xc - x, yc + y);
+    set_pixel(canvas, xc + x, yc - y);
+    set_pixel(canvas, xc - x, yc - y);
+    set_pixel(canvas, xc + y, yc + x);
+    set_pixel(canvas, xc - y, yc + x);
+    set_pixel(canvas, xc + y, yc - x);
+    set_pixel(canvas, xc - y, yc - x);
+}
+
+// Bresenham's Midpoint Circle Algorithm
+void draw_circle(char canvas[HEIGHT][WIDTH], int xc, int yc, int r) {
     int x = 0;
     int y = r;
     int d = 3 - 2 * r;
+    draw_circle_points(canvas, xc, yc, x, y);
     while (y >= x) {
-        set_pixel(canv, cx + x, cy + y);
-        set_pixel(canv, cx - x, cy + y);
-        set_pixel(canv, cx + x, cy - y);
-        set_pixel(canv, cx - x, cy - y);
-        set_pixel(canv, cx + y, cy + x);
-        set_pixel(canv, cx - y, cy + x);
-        set_pixel(canv, cx + y, cy - x);
-        set_pixel(canv, cx - y, cy - x);
-        
         x++;
         if (d > 0) {
             y--;
@@ -163,167 +164,228 @@ void draw_circle(char canv[ROWS][COLS], int cx, int cy, int r) {
         } else {
             d = d + 4 * x + 6;
         }
+        draw_circle_points(canvas, xc, yc, x, y);
     }
 }
-// Triangle drawn by connecting 3 points
-void draw_triangle(char canv[ROWS][COLS], int x1, int y1, int x2, int y2, int x3, int y3) {
-    draw_line(canv, x1, y1, x2, y2);
-    draw_line(canv, x2, y2, x3, y3);
-    draw_line(canv, x3, y3, x1, y1);
+
+// Draw triangle from 3 vertices using three lines
+void draw_triangle(char canvas[HEIGHT][WIDTH], int x1, int y1, int x2, int y2, int x3, int y3) {
+    draw_line(canvas, x1, y1, x2, y2);
+    draw_line(canvas, x2, y2, x3, y3);
+    draw_line(canvas, x3, y3, x1, y1);
 }
-// Render shapes into the canvas array
-void render_shapes(char canv[ROWS][COLS], Shape shp[], int count) {
-    clear_canvas(canv);
-    for (int i = 0; i < count; i++) {
-        switch (shp[i].type) {
+
+// Re-render all active shapes on clean canvas
+void render_shapes() {
+    clear_canvas(canvas);
+    for (int i = 0; i < num_shapes; i++) {
+        Shape s = shapes[i];
+        switch (s.type) {
             case SHAPE_LINE:
-                draw_line(canv, shp[i].data.line.x1, shp[i].data.line.y1, 
-                                shp[i].data.line.x2, shp[i].data.line.y2);
+                draw_line(canvas, s.params.line.x1, s.params.line.y1, s.params.line.x2, s.params.line.y2);
                 break;
             case SHAPE_RECTANGLE:
-                draw_rectangle(canv, shp[i].data.rect.x1, shp[i].data.rect.y1, 
-                                     shp[i].data.rect.x2, shp[i].data.rect.y2);
+                draw_rectangle(canvas, s.params.rect.x1, s.params.rect.y1, s.params.rect.x2, s.params.rect.y2);
                 break;
             case SHAPE_CIRCLE:
-                draw_circle(canv, shp[i].data.circle.cx, shp[i].data.circle.cy, 
-                                  shp[i].data.circle.r);
+                draw_circle(canvas, s.params.circle.xc, s.params.circle.yc, s.params.circle.r);
                 break;
             case SHAPE_TRIANGLE:
-                draw_triangle(canv, shp[i].data.tri.x1, shp[i].data.tri.y1, 
-                                    shp[i].data.tri.x2, shp[i].data.tri.y2, 
-                                    shp[i].data.tri.x3, shp[i].data.tri.y3);
+                draw_triangle(canvas, s.params.triangle.x1, s.params.triangle.y1,
+                                      s.params.triangle.x2, s.params.triangle.y2,
+                                      s.params.triangle.x3, s.params.triangle.y3);
                 break;
         }
     }
 }
-// Add a shape to the editor list
-void add_shape_menu() {
-    if (shape_count >= MAX_SHAPES) {
-        printf("Error: Maximum shape limit reached (%d).\n", MAX_SHAPES);
+
+// List all active shapes in the picture
+void list_shapes() {
+    if (num_shapes == 0) {
+        printf("No active shapes in the picture.\n");
         return;
     }
-    printf("\nSelect Shape to Add:\n");
-    printf("1. Line\n");
-    printf("2. Rectangle\n");
-    printf("3. Circle\n");
-    printf("4. Triangle\n");
-    printf("5. Back to Main Menu\n");
-    
-    int choice = read_int("Enter choice (1-5): ", 1, 5);
-    if (choice == 5) return;
-    Shape new_shape;
-    new_shape.id = next_shape_id++;
-    switch (choice) {
-        case 1:
-            printf("\n--- Add Line ---\n");
-            new_shape.type = SHAPE_LINE;
-            new_shape.data.line.x1 = read_int("Enter X1 (0-59): ", 0, COLS - 1);
-            new_shape.data.line.y1 = read_int("Enter Y1 (0-19): ", 0, ROWS - 1);
-            new_shape.data.line.x2 = read_int("Enter X2 (0-59): ", 0, COLS - 1);
-            new_shape.data.line.y2 = read_int("Enter Y2 (0-19): ", 0, ROWS - 1);
-            shapes[shape_count++] = new_shape;
-            printf("Line added successfully (ID: %d).\n", new_shape.id);
-            break;
-        case 2:
-            printf("\n--- Add Rectangle ---\n");
-            new_shape.type = SHAPE_RECTANGLE;
-            new_shape.data.rect.x1 = read_int("Enter Top-Left X (0-59): ", 0, COLS - 1);
-            new_shape.data.rect.y1 = read_int("Enter Top-Left Y (0-19): ", 0, ROWS - 1);
-            new_shape.data.rect.x2 = read_int("Enter Bottom-Right X (0-59): ", 0, COLS - 1);
-            new_shape.data.rect.y2 = read_int("Enter Bottom-Right Y (0-19): ", 0, ROWS - 1);
-            shapes[shape_count++] = new_shape;
-            printf("Rectangle added successfully (ID: %d).\n", new_shape.id);
-            break;
-        case 3:
-            printf("\n--- Add Circle ---\n");
-            new_shape.type = SHAPE_CIRCLE;
-            new_shape.data.circle.cx = read_int("Enter Center X (0-59): ", 0, COLS - 1);
-            new_shape.data.circle.cy = read_int("Enter Center Y (0-19): ", 0, ROWS - 1);
-            new_shape.data.circle.r = read_int("Enter Radius (0-30): ", 0, 30);
-            shapes[shape_count++] = new_shape;
-            printf("Circle added successfully (ID: %d).\n", new_shape.id);
-            break;
-        case 4:
-            printf("\n--- Add Triangle ---\n");
-            new_shape.type = SHAPE_TRIANGLE;
-            new_shape.data.tri.x1 = read_int("Enter Vertex 1 X (0-59): ", 0, COLS - 1);
-            new_shape.data.tri.y1 = read_int("Enter Vertex 1 Y (0-19): ", 0, ROWS - 1);
-            new_shape.data.tri.x2 = read_int("Enter Vertex 2 X (0-59): ", 0, COLS - 1);
-            new_shape.data.tri.y2 = read_int("Enter Vertex 2 Y (0-19): ", 0, ROWS - 1);
-            new_shape.data.tri.x3 = read_int("Enter Vertex 3 X (0-59): ", 0, COLS - 1);
-            new_shape.data.tri.y3 = read_int("Enter Vertex 3 Y (0-19): ", 0, ROWS - 1);
-            shapes[shape_count++] = new_shape;
-            printf("Triangle added successfully (ID: %d).\n", new_shape.id);
-            break;
-    }
-}
-// Delete a shape from the list
-void delete_shape_menu() {
-    if (shape_count == 0) {
-        printf("\nNo objects to delete.\n");
-        return;
-    }
-    printf("\n--- Active Objects ---\n");
-    for (int i = 0; i < shape_count; i++) {
-        printf("ID: %d | ", shapes[i].id);
-        switch (shapes[i].type) {
+    printf("Active Shapes in the picture:\n");
+    for (int i = 0; i < num_shapes; i++) {
+        Shape s = shapes[i];
+        printf("ID [%d] - ", s.id);
+        switch (s.type) {
             case SHAPE_LINE:
                 printf("Line: (%d, %d) to (%d, %d)\n", 
-                       shapes[i].data.line.x1, shapes[i].data.line.y1,
-                       shapes[i].data.line.x2, shapes[i].data.line.y2);
+                       s.params.line.x1, s.params.line.y1, 
+                       s.params.line.x2, s.params.line.y2);
                 break;
             case SHAPE_RECTANGLE:
-                printf("Rectangle: Top-Left (%d, %d), Bottom-Right (%d, %d)\n", 
-                       shapes[i].data.rect.x1, shapes[i].data.rect.y1,
-                       shapes[i].data.rect.x2, shapes[i].data.rect.y2);
+                printf("Rectangle: corners (%d, %d) and (%d, %d)\n", 
+                       s.params.rect.x1, s.params.rect.y1, 
+                       s.params.rect.x2, s.params.rect.y2);
                 break;
             case SHAPE_CIRCLE:
-                printf("Circle: Center (%d, %d), Radius %d\n", 
-                       shapes[i].data.circle.cx, shapes[i].data.circle.cy,
-                       shapes[i].data.circle.r);
+                printf("Circle: center (%d, %d), radius %d\n", 
+                       s.params.circle.xc, s.params.circle.yc, 
+                       s.params.circle.r);
                 break;
             case SHAPE_TRIANGLE:
-                printf("Triangle: A(%d, %d), B(%d, %d), C(%d, %d)\n", 
-                       shapes[i].data.tri.x1, shapes[i].data.tri.y1,
-                       shapes[i].data.tri.x2, shapes[i].data.tri.y2,
-                       shapes[i].data.tri.x3, shapes[i].data.tri.y3);
+                printf("Triangle: vertices (%d, %d), (%d, %d), (%d, %d)\n", 
+                       s.params.triangle.x1, s.params.triangle.y1, 
+                       s.params.triangle.x2, s.params.triangle.y2, 
+                       s.params.triangle.x3, s.params.triangle.y3);
                 break;
         }
     }
-    int id_to_delete = read_int("Enter the ID of the object to delete (or 0 to cancel): ", 0, 9999);
-    if (id_to_delete == 0) return;
+}
+
+// Print canvas grid with horizontal and vertical headers for easy coordinate tracing
+void display_canvas(char canvas[HEIGHT][WIDTH]) {
+    printf("\n");
+    // Top border
+    printf("   +");
+    for (int x = 0; x < WIDTH; x++) printf("-");
+    printf("+\n");
+
+    for (int y = 0; y < HEIGHT; y++) {
+        printf("%2d |", y);
+        for (int x = 0; x < WIDTH; x++) {
+            printf("%c", canvas[y][x]);
+        }
+        printf("|\n");
+    }
+
+    // Bottom border
+    printf("   +");
+    for (int x = 0; x < WIDTH; x++) printf("-");
+    printf("+\n");
+    
+    // Draw column numbers (tens)
+    printf("    ");
+    for (int x = 0; x < WIDTH; x++) {
+        if (x % 10 == 0) printf("%d", x / 10);
+        else printf(" ");
+    }
+    printf("\n    ");
+    // Draw column numbers (units)
+    for (int x = 0; x < WIDTH; x++) {
+        printf("%d", x % 10);
+    }
+    printf("\n\n");
+
+    list_shapes();
+}
+
+// Menu handler for adding shapes
+void add_shape_menu() {
+    if (num_shapes >= MAX_SHAPES) {
+        printf("Error: Maximum shape capacity reached (%d)!\n", MAX_SHAPES);
+        return;
+    }
+
+    printf("\n--- Add Object Menu ---\n");
+    printf("1. Add Line\n");
+    printf("2. Add Rectangle\n");
+    printf("3. Add Circle\n");
+    printf("4. Add Triangle\n");
+    printf("5. Back to Main Menu\n");
+    
+    int choice = get_int_input("Choose shape to add: ", 1, 5);
+    if (choice == 5) return;
+
+    Shape s;
+    s.id = next_id++; // Assign unique ID
+    
+    switch (choice) {
+        case 1: // Line
+            s.type = SHAPE_LINE;
+            printf("Enter details for the Line:\n");
+            s.params.line.x1 = get_int_input("Start X (0 to 59): ", 0, WIDTH - 1);
+            s.params.line.y1 = get_int_input("Start Y (0 to 19): ", 0, HEIGHT - 1);
+            s.params.line.x2 = get_int_input("End X (0 to 59): ", 0, WIDTH - 1);
+            s.params.line.y2 = get_int_input("End Y (0 to 19): ", 0, HEIGHT - 1);
+            break;
+        case 2: // Rectangle
+            s.type = SHAPE_RECTANGLE;
+            printf("Enter details for the Rectangle (two opposite corner vertices):\n");
+            s.params.rect.x1 = get_int_input("Corner 1 X (0 to 59): ", 0, WIDTH - 1);
+            s.params.rect.y1 = get_int_input("Corner 1 Y (0 to 19): ", 0, HEIGHT - 1);
+            s.params.rect.x2 = get_int_input("Corner 2 X (0 to 59): ", 0, WIDTH - 1);
+            s.params.rect.y2 = get_int_input("Corner 2 Y (0 to 19): ", 0, HEIGHT - 1);
+            break;
+        case 3: // Circle
+            s.type = SHAPE_CIRCLE;
+            printf("Enter details for the Circle:\n");
+            s.params.circle.xc = get_int_input("Center X (0 to 59): ", 0, WIDTH - 1);
+            s.params.circle.yc = get_int_input("Center Y (0 to 19): ", 0, HEIGHT - 1);
+            s.params.circle.r  = get_int_input("Radius (1 to 30): ", 1, 30);
+            break;
+        case 4: // Triangle
+            s.type = SHAPE_TRIANGLE;
+            printf("Enter details for the Triangle (3 vertices):\n");
+            s.params.triangle.x1 = get_int_input("Vertex 1 X (0 to 59): ", 0, WIDTH - 1);
+            s.params.triangle.y1 = get_int_input("Vertex 1 Y (0 to 19): ", 0, HEIGHT - 1);
+            s.params.triangle.x2 = get_int_input("Vertex 2 X (0 to 59): ", 0, WIDTH - 1);
+            s.params.triangle.y2 = get_int_input("Vertex 2 Y (0 to 19): ", 0, HEIGHT - 1);
+            s.params.triangle.x3 = get_int_input("Vertex 3 X (0 to 59): ", 0, WIDTH - 1);
+            s.params.triangle.y3 = get_int_input("Vertex 3 Y (0 to 19): ", 0, HEIGHT - 1);
+            break;
+    }
+
+    shapes[num_shapes++] = s;
+    printf("Shape added successfully with ID %d!\n", s.id);
+    render_shapes();
+}
+
+// Menu handler for deleting shapes using their unique ID
+void delete_shape_menu() {
+    if (num_shapes == 0) {
+        printf("No shapes to delete.\n");
+        return;
+    }
+
+    list_shapes();
+    int target_id = get_int_input("Enter the ID of the shape to delete (or 0 to cancel): ", 0, 99999);
+    if (target_id == 0) return;
+
     int found_index = -1;
-    for (int i = 0; i < shape_count; i++) {
-        if (shapes[i].id == id_to_delete) {
+    for (int i = 0; i < num_shapes; i++) {
+        if (shapes[i].id == target_id) {
             found_index = i;
             break;
         }
     }
+
     if (found_index == -1) {
-        printf("Object with ID %d not found.\n", id_to_delete);
+        printf("Error: Shape with ID %d not found!\n", target_id);
         return;
     }
-    // Shift shapes array to delete the item
-    for (int i = found_index; i < shape_count - 1; i++) {
+
+    // Shift shapes to fill the gap
+    for (int i = found_index; i < num_shapes - 1; i++) {
         shapes[i] = shapes[i + 1];
     }
-    shape_count--;
-    printf("Object ID %d deleted successfully.\n", id_to_delete);
+    num_shapes--;
+    printf("Shape with ID %d deleted successfully!\n", target_id);
+    render_shapes();
 }
+
 int main() {
-    // Initialize canvas to empty background '_'
-    clear_canvas(canvas);
+    // Initial render of empty canvas
+    render_shapes();
+
+    printf("=========================================\n");
+    printf("       2D Graphics Editor (Console)      \n");
+    printf("=========================================\n");
+
     while (1) {
-        printf("\n=== 2D Terminal Graphics Editor ===\n");
+        printf("\n--- Main Menu ---\n");
         printf("1. Display Canvas\n");
-        printf("2. Add an Object (Line, Rectangle, Circle, Triangle)\n");
-        printf("3. Delete an Object\n");
+        printf("2. Add Object\n");
+        printf("3. Delete Object\n");
         printf("4. Clear All Objects\n");
         printf("5. Exit\n");
-        int choice = read_int("Select option (1-5): ", 1, 5);
+
+        int choice = get_int_input("Enter your choice: ", 1, 5);
+
         switch (choice) {
             case 1:
-                render_shapes(canvas, shapes, shape_count);
                 display_canvas(canvas);
                 break;
             case 2:
@@ -333,11 +395,12 @@ int main() {
                 delete_shape_menu();
                 break;
             case 4:
-                shape_count = 0;
-                printf("All objects cleared.\n");
+                num_shapes = 0;
+                render_shapes();
+                printf("All objects cleared successfully.\n");
                 break;
             case 5:
-                printf("Exiting... Goodbye!\n");
+                printf("Exiting 2D Graphics Editor. Goodbye!\n");
                 return 0;
         }
     }
